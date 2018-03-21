@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="https://d3js.org/d3.v4.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.js"></script>
+    
+    <style>
+        div.tooltip {
+            position: absolute;
+            text-align: center;
+            width: 150px;
+            height: 40px;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+<fieldset>
+    <legend>Data Overview - Number of API calls in each type</legend>
+    <div id="stats"></div>
+</fieldset>
+<div id="divAnalysis">
+    <button id="btnAnalysis">Analyze Process Create</button>
+    <button id="btnLoadImage">Analyze Load Image</button>
+</div>
+<fieldset>
+    <legend>
+        Heat Map
+    </legend>
+    <div id="heatmap"></div>
+    <div id="domain"></div>
+</fieldset>
+
+<script>
+    var div = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+    d3.queue()
+        .defer(d3.csv, "data/LogFile_V1.csv", function (d) {
+            return {
+                Timestamp: d['Time of Day'],
+                PID: d['PID'],
+                Process_Name: d['Process Name'],
+                Operation: d["Operation"],
+                Path: d["Path"],
+                Detail: d["Detail"]
+            }
+        })
+        .defer(d3.csv, "data/domain.csv")
+        .await(function (error, data, domain) {
+            if (error) {
+                console.error('Oh dear, something went wrong: ' + error);
+            }
+            else {
+                // Process Data before visualization
+                var domainFormat = /[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+/;
+                var previous_second = +data[0].Timestamp.slice(5, 7);
+                var previous_microsecond = +data[0].Timestamp.slice(8, 15);
+                var metrics = 10000000;
+                var previous_time_step = previous_second * metrics + previous_microsecond;
+                var current_time_step = 0;
+
+
+                data.forEach(function (datum, index) {
+                    datum.second = +datum.Timestamp.slice(5, 7);
+                    datum.macrosecond = +datum.Timestamp.slice(8, 15);
+                    datum.Step = datum.second * metrics + datum.macrosecond - previous_time_step + current_time_step;
+                    current_time_step = datum.Step;
+                    previous_time_step = datum.second * metrics + datum.macrosecond;
+                    if (datum.Operation == 'Process Create') {
+                        datum.targetProcessName = datum.Path.replace(/^.*[\\\/]/, '');
+                        datum.childPID = datum.Detail.slice(5, 9);
+                    }
+                    if (datum.Operation == 'UDP Send') {
+
+                        var getdomain = datum.Path.slice(datum.Path.indexOf('->') + 3, -5);
+                        if (getdomain.match(domainFormat)) {
+                            if (getdomain.split('.').length > 2) {
+                                getdomain = getdomain.slice(getdomain.indexOf('.') + 1);
+                                datum.Domain = getdomain;
+                            } else {
+                                datum.Domain = getdomain;
+                            }
+                            domain.forEach(function (dm_value) {
+                                if (dm_value.domain == datum.Domain) {
+                                    var obj = {}
+                                    obj.count = +dm_value.count;
+                                    obj.harmless = +dm_value.harmless;
+                                    obj.malicious = +dm_value.malicious;
+                                    obj.suspicious = +dm_value.suspicious;
+                                    obj.undetected = +dm_value.undetected;
+                                    datum.VirusTotal = obj;
+                                }
+                            })
+                        }
+
+                    }
+                    if (datum.Path.slice(-3).toLowerCase() == 'dll') {
+                        datum.library = datum.Path.replace(/^.*[\\\/]/, '')
+                    }
+                    datum.Process = getProcessName(datum.Operation);
+                });
+                // End of pre-processing data
+
+                // Load Statistics data on the first box
+                LoadStats();
+                loadProcessByName();
+
+                function LoadStats() {
+                    var margin_left = 120;
+                    var bar_height = 35;
+                    var group_by_process = d3.nest().key(function (d) {
+                        return d.Process
+                    }).entries(data)
+                    var xScale = d3.scaleLinear()
+                        .domain([0, d3.max(group_by_process, function (d) {
+                            return d.values.length;
+                        })])
+                        .range([10, 1000]);
+                    var svgStats = d3.select('#stats').append('svg').attr('width', window.innerWidth).attr('height', 200);
+                    group_by_process.forEach(function (process, index) {
+                        var group = svgStats.append('g').attr("transform", "translate(0," + index * bar_height + ")");
+                        var child_process = d3.nest().key(function (d) {
+                            return d.Operation
+                        }).entries(process.values);
+                        child_process = child_process.sort(function (a, b) {
+                            return b.values.length - a.values.length;
+                        })
+                        var xpos = margin_left;
+                        child_process.forEach(function (child) {
+                            group.append('rect').attr('x', function (d) {
+                                return xpos;
+                            })
+                                .attr('width', function (d) {
+                                    return xScale(child.values.length)
+                                })
+                                .attr('height', 30)
+                                .attr('fill', function (d) {
+                                    return colorPicker(child.key);
+                                })
+                            xpos += xScale(child.values.length) + 2;
+                        })
+                        group.append('text').text(process.key + " (" + process.values.length + ")").attr('x', 0).attr('y', 18);
+                    })
+                }
+
+                function loadProcessByName() {
+                    d3.select('#heatmap').selectAll("*").remove();
+                    var group_by_process_name = d3.nest().key(function (d) {
+                        return d.Process_Name
+
+                    }).entries(data);
+
+                    group_by_process_name.forEach(function (d) {
+                        d.position = getPosition(d.key);
+                    })
+                    group_by_process_name = group_by_process_name.sort(function (a, b) {
+                        return a.position - b.position;
+                    })
+                    var margin_left = 100;
+                    var rect_height = 30, rect_margin_top = 10, group_rect_height = rect_height + rect_margin_top,
+                        rect_width = 0.9;
+                    var svgheight = group_by_process_name.length * (group_rect_height);
+                    var max_step = d3.max(data, function (d) {
+                        return d.Step;
+                    });
+
+                    var StepScale = d3.scaleLinear()
+                        .domain([0, max_step])
+                        .range([0, 2300]);
+
+                    var svg_process_name = d3.select('#heatmap').append('svg').attr('width', 3000).attr('height', svgheight);
+                    svg_process_name.append("svg:defs").append("svg:marker")
+                        .attr("id", "arrow")
+                        .attr("refX", 0)
+                        .attr("refY", 4)
+                        .attr("markerWidth", 8)
+                        .attr("markerHeight", 8).attr('fill', 'rgb(37, 142, 215)')
+                        .attr("orient", 0).append('path').attr('d', 'M0,0 L0,8 L8,4 z');
+
+                    group_by_process_name.forEach(function (row, index) {
+                        var group = svg_process_name.append('g').attr("transform", "translate(0," + index * group_rect_height + ")");
+                        group.append('text').text(row.key)
+                            .attr('x', ((StepScale(row.values[row.values.length - 1].Step)) * rect_width + margin_left) + 10).attr('y', 18).attr('font-weight', 'bold')
+                            .attr('text-anchor', 'start');
+                        group.append('line').attr('stroke-dasharray', '2, 5').attr('stroke', 'black').attr('stroke-width', 0.1)
+                            .attr('x1', (StepScale(row.values[0].Step) * rect_width + margin_left + 10)).attr('y1', rect_height / 2)
+                            .attr('x2', (((StepScale(row.values[row.values.length - 1].Step)) * rect_width + margin_left) + 10)).attr('y2', rect_height / 2);
+                        group.append('rect').attr('x', 2400).attr('width', 40)
+                            .attr('index', index)
+                            .attr('height', rect_height).attr('id', row.key.slice(0, -4).toLowerCase()).attr('fill', 'rgb(204, 215, 255)');
+                        group.append('text').text(row.key)
+                            .attr('x', 2390).attr('y', 18).attr('font-weight', 'bold')
+                            .attr('text-anchor', 'end');
+                        var rect = group.selectAll('rect').data(row.values).enter().append('rect')
+                            .attr('x', function (d, i) {
+                                return (StepScale(d.Step)) * rect_width + margin_left;
+                            })
+                            .attr('class', function (d, i) {
+                                return d.Process_Name.slice(0, -4);
+                            })
+                            .attr('id', function (d) {
+                                return d.Step;
+                            })
+                            .attr('width', rect_width)
+                            .attr('height', function (d) {
+                                if(d.hasOwnProperty('VirusTotal')){
+                                    if(d.VirusTotal.malicious >0)
+                                    return rect_height+5;
+                                    else return rect_height;
+                                }
+                                    else{
+                                    return rect_height;
+                                }
+                            })
+                            .style('fill-opacity', 0.6)
+                            .attr('fill', function (d) {
+                                return colorPicker(d.Operation);
+                            }) .on('mouseover', function (d) {
+                                if (d.Operation == 'UDP Send'&&d.hasOwnProperty('VirusTotal')) {
+
+                                    div.transition()
+                                        .duration(200)
+                                        .style("opacity", 1).style('height','100px').style('width','250px');
+                                    div.html('<table><tr><td colspan="4">Source: https://www.virustotal.com</td></tr><tr><td><img src="images/clean.png" width="20" height="20"/></td><td> Clean ('+d.VirusTotal.harmless+')</td>' +
+                                        '<td><img src="images/malicious.png" width="20" height="20"/></td><td> Malicious ('+d.VirusTotal.malicious+')</td></tr>' +
+                                        '<tr><td><img src="images/suspicious.png" width="20" height="20"/></td><td> Suspicious ('+d.VirusTotal.suspicious+')</td>' +
+                                        '<td><img src="images/question.png" width="20" height="20"/></td><td> Undetected ('+d.VirusTotal.undetected+')</td></tr><tr><td colspan="4">Target domain: '+d.Domain+'</td></tr></table>')
+                                        .style("left", (d3.event.pageX) + "px")
+                                        .style("top", (d3.event.pageY - 28) + "px");
+                                }
+                                else {
+
+
+                                    div.transition()
+                                        .duration(200)
+                                        .style("opacity", 1);
+                                    div.html(d.Process_Name + "<br/>" + d.Timestamp + "<br/>")
+                                        .style("left", (d3.event.pageX) + "px")
+                                        .style("top", (d3.event.pageY - 28) + "px");
+
+                                }
+                            })
+                    })
+                    var group_by_process_create = d3.nest().key(function (d) {
+                       return d.Operation;
+
+                    }).entries(data)
+                    group_by_process_create = group_by_process_create.filter(function (value) { return value.key=='Process Create' })[0].values;
+                    console.log(group_by_process_create)
+                    group_by_process_create.forEach(function (d) {
+                        svg_process_name.append('path')
+                            .attr('d', d3.arc()
+                                .innerRadius((getPosition(d.targetProcessName) - getPosition(d.Process_Name)) * 40 / 2)
+                                .outerRadius((getPosition(d.targetProcessName) - getPosition(d.Process_Name)) * 40 / 2 + 1.5)
+                                .startAngle(-Math.PI) //converting from degs to radians
+                                .endAngle(Math.PI / 90))
+                            .attr('fill', 'rgb(37, 142, 215)')
+                            .attr('transform', function (value) {
+                                var posX = (StepScale(d.Step)) * rect_width + margin_left - 1;
+                                var posY = (getPosition(d.targetProcessName) + getPosition(d.Process_Name)) * group_rect_height / 2 + rect_height / 2;
+                                return 'translate(' + posX + ',' + posY + ')';
+                            }).attr("marker-end", "url(#arrow)")
+                        console.log('source line: '+getPosition(d.Process_Name) )
+                        console.log('target line: '+getPosition(d.targetProcessName) )
+                    })
+                }
+
+
+            }
+        });
+
+    function getProcessName(operation) {
+        switch (operation) {
+            case "Process Create":
+                return "Process";
+            case "Load Image":
+                return "Process";
+            case "CreateFile":
+                return "File";
+            case "WriteFile":
+                return "File";
+            case "SetRenameInformationFile":
+                return "File";
+            case "RegCreateKey":
+                return "Registry";
+            case "RegDeleteValue":
+                return "Registry";
+            case "RegDeleteKey":
+                return "Registry";
+            case "UDP Send":
+                return "Network";
+            case "UDP Receive":
+                return "Network";
+            case "TCP Receive":
+                return "Network";
+            case "TCP Connect":
+                return "Network";
+            case "TCP Send":
+                return "Network";
+
+        }
+    }
+
+    function colorPicker(operation) {
+        switch (operation) {
+            case "Process Create":
+                return "rgb(37, 142, 215)";
+            case "Load Image":
+                return "rgb(31, 119, 180)";
+            case "CreateFile":
+                return "rgb(255, 127, 14)";
+            case "WriteFile":
+                return "rgb(255, 152, 17)";
+            case "SetRenameInformationFile":
+                return "rgb(255, 181, 20)";
+            case "RegCreateKey":
+                return "rgb(44, 160, 44)";
+            case "RegDeleteValue":
+                return "rgb(53, 191, 53)";
+            case "RegDeleteKey":
+                return "rgb(63, 229, 63)";
+            case "UDP Send":
+                return "rgb(214, 39, 40)";
+            case "UDP Receive":
+                return "rgb(255, 47, 48)";
+            case "TCP Receive":
+                return "rgb(255, 56, 57)";
+            case "TCP Connect":
+                return "rgb(255, 80, 82)";
+            case "TCP Send":
+                return "rgb(255, 67, 68)";
+            default:
+                return "#000000";
+        }
+    }
+
+    function getPosition(process_name) {
+        switch (process_name) {
+            case "svchost.exe":
+                return 0;
+            case "DllHost.exe":
+                return 1;
+            case "wmiprvse.exe":
+                return 2;
+            case "OpenWith.exe":
+                return 3;
+            case "NOTEPAD.EXE":
+                return 4;
+            case "LocationNotificationWindows.exe":
+                return 5;
+            case "Explorer.EXE":
+                return 6;
+            case "cerber.exe":
+                return 7;
+            case "mshta.exe":
+                return 8;
+            case "cmd.exe":
+                return 9;
+            case "conhost.exe":
+                return 10;
+            case "taskkill.exe":
+                return 11;
+            case "PING.EXE":
+                return 12;
+            case "SearchIndexer.exe":
+                return 13;
+            case "SearchProtocolHost.exe":
+                return 14;
+            case "WMIADAP.EXE":
+                return 15;
+            case "csrss.exe":
+                return 16;
+            case "smartscreen.exe":
+                return 17;
+            case "MpCmdRun.exe":
+                return 18;
+            case "sihost.exe":
+                return 19;
+            case "taskhostw.exe":
+                return 20;
+            case "OneDrive.exe":
+                return 21;
+            case "CHXSmartScreen.exe":
+                return 22;
+
+        }
+    }
+</script>
+</body>
+</html>
