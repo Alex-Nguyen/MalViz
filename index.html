@@ -37,14 +37,28 @@
         div.tooltip {
             position: absolute;
             text-align: center;
-            width: 150px;
-            height: 40px;
+            width: auto;
+            height: auto;
             padding: 2px;
             font: 12px sans-serif;
             background: lightsteelblue;
             border: 0px;
             border-radius: 8px;
             pointer-events: none;
+        }
+        .cell-hover{
+            color:red;
+            fill:red;
+        }
+        text.text-highlight {
+            fill: red;
+            font-weight: bold;
+        }
+        text.rowLabel{
+            font-size: 12px;
+        }
+        text.colLabel{
+            font-size: 12px;
         }
     </style>
 </head>
@@ -60,7 +74,8 @@
     </legend>
     <div  style="width: 100%;position:relative;">
         <div style="width: 100%;border: 1px;float: left" id="heatmap"></div>
-        <div style="width: 100%;float: right" id="matrix"></div>
+
+        <div style="width: 100%;float: right;padding: 15px" id="matrix"></div>
     </div>
 
 </fieldset>
@@ -72,7 +87,7 @@
     d3.queue()
     //.defer(d3.csv, "data/log1data.csv", function (d) {
     //.defer(d3.csv, "data/Logfile_Test2.csv", function (d) {
-        .defer(d3.csv, "data/Logfile_Test2.csv", function (d) {
+        .defer(d3.csv, "data/Logfile_V1.csv", function (d) {
             return {
                 Timestamp: d['Time_of_Day'],
                 PID: d['PID'],
@@ -365,25 +380,16 @@
                         var filtered_library = d3.nest().key(function (d) {
                             return d.library
                         }).entries(processes)
-
+                        //console.log(filtered_library)
                         filtered_library.forEach(function (d) {
                             var obj = {};
                             obj.source = index;
                             obj.target = libarr.indexOf(d.key);
-                            obj.value = d.values.length;
+                            obj.value = d.values;
 
                             lines.push(obj);
                         })
 
-
-                        // group.append('rect').attr('x', max_scale +20).attr('width', 40)
-                        //     .attr('index', index)
-                        //     .attr('height', rect_height).attr('id', row.key.slice(0, -4).toLowerCase()).attr('fill', 'darkgray')
-                        //     .on('click', function (d) {
-                        //     d3.selectAll("line.dllline").style('opacity', 0)
-                        //     lines = d3.selectAll('line[source="' + index + '"]').style('opacity', 1);
-                        //
-                        // });
 
                         group.append('text').text(row.key.substring(0,20))
                             .attr('x', ((StepScale(row.values[row.values.length - 1].Step)) * rect_width + margin_left) + 10).attr('y', group_rect_height/2)
@@ -480,34 +486,6 @@
 
                     })
 
-                    var dllGroup = svg_process_name.append('g').attr("transform", "translate("+(window.innerWidth-210)+",0)");
-                    var number_of_dll = library.length;
-                    var padding = 10;
-                    var dll_height = (svgheight - padding * (number_of_dll)) / number_of_dll;
-
-                    // var rectDLL = dllGroup.selectAll('rect').data(library).enter()
-                    // rectDLL.append('rect').attr('x', 0).attr('y', function (d, i) {
-                    //     return i * (dll_height + padding);
-                    // }).attr('width', 40).attr('height', dll_height).attr('fill', 'darkgray').attr('id', function (d) {
-                    //     return d.key.slice(0, -4);
-                    // }).attr('index', function (d, i) {
-                    //     return i;
-                    // })
-                    // rectDLL.append('text').text(function (d) {
-                    //     return d.key.substring(0,20) + '(' + d.values.length + ')';
-                    // }).attr('x', 50).attr('y', function (d, i) {
-                    //     return i * (dll_height + padding) + (dll_height + padding) / 2;
-                    // });
-                    var ddlLineScale = d3.scaleLinear()
-                        .domain([d3.min(lines, function (d) {
-                            return d.value;
-                        }), d3.max(lines, function (d) {
-                            return d.value;
-                        })])
-                        .range([0.5, 3]);
-
-
-                    var dllLines = svg_process_name.append('g');
                     for (var i = 0; i < lines.length; i++) {
                         var obj = new Object();
                         obj.source = lines[i].source;
@@ -519,7 +497,7 @@
                         //     .attr('x2', window.innerWidth-210).attr('y2', lines[i].target * ((dll_height + padding)) + (dll_height + padding) / 4)
                     }
 
-                    drawMatrix(matrix,library,group_by_process_name);
+                    drawMatrix(matrix,libarr,group_by_process_name);
                 }
 
 
@@ -627,24 +605,20 @@
         })
         return index;
     }
-    function drawMatrix(matrix,library,group_by_process_name) {
+    function drawMatrix(matrix,lib,group_by_process_name) {
         let rect_width=20,
             rect_height=20,
             spacing=5,
             svgheight = (rect_height+spacing)*matrix.length;
         var maxvalue = d3.max(matrix,function (d) {
             return d3.max(d,function (e) {
-                return e.value;
+                return e.value.length;
             });
         });
         var ColorScale = d3.scaleLinear()
             .domain([0, Math.sqrt(maxvalue)])
             .range([0, 1]);
-
-      //  console.log(group_by_process_name);
-        console.log(matrix)
-
-        var svgMatrix = d3.select('#matrix').append('svg').attr('height',svgheight+300).attr('width',"100%");
+        var svgMatrix = d3.select('#matrix').append('svg').attr('height',svgheight+300).attr('width',"100%").attr('margin-top',"15px");
         matrix.forEach(function (row,index) {
             var group = svgMatrix.append('g').attr('height',12).attr('transform','translate(200,'+index*(rect_height+spacing)+')')
 
@@ -652,6 +626,7 @@
                     .data(row)
                     .enter()
                     .append('rect')
+                    .attr("class",'mat_rect')
                     .attr('width',rect_width)
                     .attr('height',rect_height)
                     .attr('x',function (d,i) {
@@ -660,45 +635,56 @@
                     .attr('fill',function (d) {
                         if(d.value==0) return 'white';
                         else
-                        return d3.interpolateOrRd(ColorScale(Math.sqrt(d.value)))
+                        return d3.interpolateOrRd(ColorScale(Math.sqrt(d.value.length)))
                     }).on('mouseenter', function (d,i) {
-
-                        svgMatrix.append('rect')
-                            .attr('x',200+i*(rect_height+spacing))
-                            .attr('width',rect_width)
-                            .attr('height',svgheight - (rect_height+spacing)*(index+1))
-                            .attr('class','highlight-bar').attr('y',(rect_height+spacing)*(index+1));
-
-                        svgMatrix.append('rect')
-                            .attr('x',200)
-                            .attr('width',function () {
-                              return (i)*(rect_width+spacing);
-                            })
-
-                            .attr('height',rect_height)
-                            .attr('class','highlight-bar')
-                            .attr('y',index*(rect_height+spacing));
+                       if(d.source==undefined) return;
+                        // d3.selectAll('.mat_rect').classed('cell-hover',false);
+                        d3.select(this).classed("cell-hover",true);
+                        d3.selectAll(".rowLabel.mono.r"+index).classed("text-highlight",true);
+                        d3.selectAll(".colLabel.mono.c"+i).classed("text-highlight",true);
+                        //
+                        // svgMatrix.append('rect')
+                        //     .attr('x',200+i*(rect_height+spacing))
+                        //     .attr('width',rect_width)
+                        //     .attr('height',svgheight - (rect_height+spacing)*(index+1))
+                        //     .attr('class','highlight-bar').attr('y',(rect_height+spacing)*(index+1));
+                        //
+                        // svgMatrix.append('rect')
+                        //     .attr('x',200)
+                        //     .attr('width',function () {
+                        //       return (i)*(rect_width+spacing);
+                        //     })
+                        //
+                        //     .attr('height',rect_height)
+                        //     .attr('class','highlight-bar')
+                        //     .attr('y',index*(rect_height+spacing));
                         div.transition()
                             // .duration(200)
                             .style("opacity", 1);
-                        div.html("Number of calls: "+d.value )
-                            .style("left", (d3.event.pageX) + 10 + "px")
-                            .style("top", (d3.event.pageY - 28) + "px");
+                        var text = "";
+                            d.value.forEach(function (value) { text +="Time: "+  value.Timestamp +"&nbsp; Lib: " +value.library +"<br>" })
+                        div.html("<b>Number of calls: "+d.value.length+"</b><p>"+text)
+                            .style("width","300px")
+                            .style("left", (d3.event.pageX) + 20 + "px")
+                            .style("top", (d3.event.pageY) + "px");
 
                     })
-                    .on('mouseleave',function (d) {
-                        d3.selectAll(".highlight-bar").remove();
+                    .on('mouseleave',function (d,i) {
+                        d3.select(this).classed("cell-hover",false);
+                        d3.selectAll(".rowLabel.mono.r"+index).classed("text-highlight",false);
+                        d3.selectAll(".colLabel.mono.c"+i).classed("text-highlight",false);
                     });
 
         })
         //Draw text
 
             var textGroup = svgMatrix.append('g').attr('transform','translate(200,'+matrix.length*(rect_height+spacing)+')')
-            var text = textGroup.selectAll('text').data(library).enter().append('text').attr('x',function (d,i) {
+            var text = textGroup.selectAll('text').data(lib).enter().append('text').attr('x',function (d,i) {
                 return i*(rect_height+spacing);
             }).text(function (d) {
-                return d.key;
-            }).attr('transform',function (d,i) {
+                return d;
+            }).attr("class",  function (d,i) { return "colLabel mono c"+i;} )
+                .attr('transform',function (d,i) {
                 return 'rotate(45 '+i*(rect_height+spacing)+',0)';
             })
 
@@ -707,7 +693,8 @@
                 .data(group_by_process_name).enter().append('text').text(function (d) {
                     return d.key;
                 })
-                .attr('x',190)
+                .attr("class", function (d,i) { return "rowLabel mono r"+i;} )
+                    .attr('x',190)
                 .attr('y',function (d,i) {
                     return (i)*(rect_height+spacing) +rect_height/2;
                 }).attr('text-anchor', 'end');

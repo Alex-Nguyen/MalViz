@@ -6,3 +6,10 @@ function make2Darray(rows, cols) {
     }
     return arr;
 }
+function getObjectIndex(obj,property,value) {
+    var index;
+    obj.forEach(function (d,i) {
+        if(d[property]==value) index = i;
+    })
+    return index;
+}
