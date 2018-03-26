@@ -41,8 +41,8 @@
             height: auto;
             padding: 2px;
             font: 12px sans-serif;
-            background: lightsteelblue;
-            border: 0px;
+            background: #bbb;
+            border: 1px;
             border-radius: 8px;
             pointer-events: none;
         }
@@ -86,8 +86,8 @@
         .style("opacity", 0);
     d3.queue()
     //.defer(d3.csv, "data/log1data.csv", function (d) {
-    .defer(d3.csv, "data/Logfile_Test2.csv", function (d) {
-    //    .defer(d3.csv, "data/Logfile_V1.csv", function (d) {
+    //.defer(d3.csv, "data/Logfile_Test2.csv", function (d) {
+        .defer(d3.csv, "data/Logfile_V1.csv", function (d) {
             return {
                 Timestamp: d['Time_of_Day'],
                 PID: d['PID'],
@@ -621,23 +621,31 @@
      // Create a new array of process
         var processes1 =[];
         var processes2 =[];
+        var processes3 =[];
         for (var i=0; i<group_by_process_name.length; i++) {
             var obj = {};
             var obj2 = {};
+            var obj3 = {};
             obj.name = group_by_process_name[i].key;
             obj.index = i;
             obj2.index = i;
+            obj3.index = i;
             obj.refs = matrix[i];
             var sumRefs = 0;
+            var sumLibs = 0;
             for (var j = 0; j < obj.refs.length; j++) {
                 if (obj.refs[j].value!=0){
                     sumRefs+=obj.refs[j].value.length;
+                    sumLibs++;
                 }
             }
             obj.sumRefs = sumRefs;
+            obj.sumLibs = sumLibs;
             obj2.sumRefs = sumRefs;
+            obj3.sumLibs = sumLibs;
             processes1.push(obj);
             processes2.push(obj2);
+            processes3.push(obj3);
         }
 
         // Order processes2 by the total of references
@@ -648,15 +656,28 @@
             else
                 return -1;
         });
+        // Order processes3 by the total of libs
+        processes3.sort(function (a, b) {
+            if (a.sumLibs < b.sumLibs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+
 
         // Copy the order from processes2 to processes
         for (var i=0; i<processes2.length; i++) {
             var index = processes2[i].index;
             processes1[index].indexSumRefs = i;
         }
+        // Copy the order from processes3 to processes
+        for (var i=0; i<processes3.length; i++) {
+            var index = processes3[i].index;
+            processes1[index].indexSumLibs = i;
+        }
 
 
-        var processes1 = processDif(processes1,0);
 
 
         function getRefCount(i, j){
@@ -670,9 +691,9 @@
         }
         function getDif(count1, count2){ // penalty function
             if (count1==0 && count2!=0)
-                return 10000;
+                return 1000;
             else if (count1!=0 && count2==0)
-                return 10000;
+                return 1000;
             else
                 return Math.abs(count1-count2);
         }
@@ -781,13 +802,39 @@
             var index = libs2[i].index;
             libs[index].indexSumRefs = i;
         }
+        //var processes1 = processDif(processes1,processes3[0].index);
+        processes1 = processDif(processes1,0);
         libs = processLib(libs,0);
-        debugger;
-
-        //debugger;
 
         // Order options
         var orderOption =2;
+        function getProcessIndex(index){  // order of process in row of the matrix
+            var newIndex;
+            if (orderOption==0) {// default order of processes
+                newIndex = index;
+            }
+            else if (orderOption==1) {// order by the total lib references
+                newIndex = processes1[index].indexSumRefs;
+            }
+            else{
+                newIndex = processes1[index].indexSimilarity;
+            }
+            return newIndex;
+        }
+        function getLibIndex(index){  // order of process in column of the matrix
+            var newIndex;
+            if (orderOption==0) {// default order of processes
+                newIndex = index;
+            }
+            else if (orderOption==1) {// order by the total lib references
+                newIndex = libs[index].indexSumRefs;
+            }
+            else{
+                newIndex = libs[index].indexSimilarity;
+            }
+            return newIndex;
+        }
+
 
         var ColorScale = d3.scaleLinear()
             .domain([0, Math.sqrt(maxvalue)])
@@ -795,17 +842,7 @@
         var svgMatrix = d3.select('#matrix').append('svg').attr('height',svgheight+300).attr('width',"100%").attr('margin-top',"15px");
         matrix.forEach(function (row,index) {
 
-            var newIndex = index;
-            if (orderOption==1) {// order by the total lib references
-                newIndex = processes1[index].indexSumRefs;
-            }
-            else{
-                newIndex = processes1[index].indexSimilarity;
-            }
-
-
-            var group = svgMatrix.append('g').attr('height',12).attr('transform','translate(200,'+newIndex*(rect_height+spacing)+')')
-
+            var group = svgMatrix.append('g').attr('height',12).attr('transform','translate(200,'+getProcessIndex(index)*(rect_height+spacing)+')')
                 var rect = group.selectAll('rect')
                     .data(row)
                     .enter()
@@ -814,15 +851,7 @@
                     .attr('width',rect_width)
                     .attr('height',rect_height)
                     .attr('x',function (d,i) {
-                        var newIndex = i;
-                        if (orderOption==1) {// order by the total lib references
-                            newIndex = libs[i].indexSumRefs;
-                        }
-                        else{
-                            newIndex = libs[i].indexSimilarity;
-                        }
-
-                      return  newIndex*(rect_height+spacing);
+                      return  getLibIndex(i)*(rect_height+spacing);
                     })
                     .attr('fill',function (d) {
                         return d.value==0 ? 'white' : d3.interpolateOrRd(ColorScale(Math.sqrt(d.value.length)));
@@ -830,8 +859,21 @@
                        if(d.source==undefined) return;
                         // d3.selectAll('.mat_rect').classed('cell-hover',false);
                         d3.select(this).classed("cell-hover",true);
-                        d3.selectAll(".rowLabel.mono.r"+index).classed("text-highlight",true);
-                        d3.selectAll(".colLabel.mono.c"+i).classed("text-highlight",true);
+
+                        for (var r=0; r<processes1.length; r++) {
+                            if (r==index)
+                                d3.selectAll(".rowLabel.mono.r"+r).style("opacity", 1);
+                            else
+                                d3.selectAll(".rowLabel.mono.r"+r).style("opacity", 0.2);
+                          //  d3.selectAll(".colLabel.mono.c"+i).style("opacity", 1);;
+                        }
+                        for (var c=0; c<libs.length; c++) {
+                            if (c==i)
+                                d3.selectAll(".colLabel.mono.c"+c).style("opacity", 1);
+                            else
+                                d3.selectAll(".colLabel.mono.c"+c).style("opacity", 0.2);
+                        }
+
                         //
                         // svgMatrix.append('rect')
                         //     .attr('x',200+i*(rect_height+spacing))
@@ -861,16 +903,19 @@
                     })
                     .on('mouseleave',function (d,i) {
                         d3.select(this).classed("cell-hover",false);
-                        d3.selectAll(".rowLabel.mono.r"+index).classed("text-highlight",false);
-                        d3.selectAll(".colLabel.mono.c"+i).classed("text-highlight",false);
+                        for (var r=0; r<processes1.length; r++) {
+                            d3.selectAll(".rowLabel.mono.r"+r).style("opacity", 1);
+                        }
+                        for (var c=0; c<libs.length; c++) {
+                            d3.selectAll(".colLabel.mono.c"+c).style("opacity", 1);
+                        }
                     });
 
         })
         //Draw text
-
             var textGroup = svgMatrix.append('g').attr('transform','translate(200,'+matrix.length*(rect_height+spacing)+')')
             var text = textGroup.selectAll('text').data(lib).enter().append('text').attr('x',function (d,i) {
-                return i*(rect_height+spacing);
+                return (i)*(rect_height+spacing);
             }).text(function (d) {
                 return d;
             }).attr("class",  function (d,i) { return "colLabel mono c"+i;} )
@@ -886,7 +931,7 @@
                 .attr("class", function (d,i) { return "rowLabel mono r"+i;} )
                     .attr('x',190)
                 .attr('y',function (d,i) {
-                    return (i)*(rect_height+spacing) +rect_height/2;
+                    return getProcessIndex(i)*(rect_height+spacing) +rect_height/2;
                 }).attr('text-anchor', 'end');
 
 
