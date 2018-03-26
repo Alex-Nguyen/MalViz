@@ -86,8 +86,8 @@
         .style("opacity", 0);
     d3.queue()
     //.defer(d3.csv, "data/log1data.csv", function (d) {
-    //.defer(d3.csv, "data/Logfile_Test2.csv", function (d) {
-        .defer(d3.csv, "data/Logfile_V1.csv", function (d) {
+    .defer(d3.csv, "data/Logfile_Test2.csv", function (d) {
+    //    .defer(d3.csv, "data/Logfile_V1.csv", function (d) {
             return {
                 Timestamp: d['Time_of_Day'],
                 PID: d['PID'],
@@ -244,7 +244,8 @@
                     group_by_process_create = group_by_process_create.filter(function (value) {
                         return value.key == 'Process Create'
                     })[0].values;
-                    //YOUR DATA YOU NEED HERE -> UPDATED DATA
+
+
                     var updated_data = UpdateProcessNameWithChild(group_by_process_name, group_by_process_create);
                     for (var i = 0; i < updated_data.length; i++) {
                         updated_data[i].children = [];
@@ -606,21 +607,76 @@
         return index;
     }
     function drawMatrix(matrix,lib,group_by_process_name) {
-        let rect_width=20,
-            rect_height=20,
-            spacing=5,
+        var rect_width=12,
+            rect_height=11,
+            spacing=2,
             svgheight = (rect_height+spacing)*matrix.length;
         var maxvalue = d3.max(matrix,function (d) {
             return d3.max(d,function (e) {
                 return e.value.length;
             });
         });
+
+     // Tommy 2018 ******************************************
+     // Create a new array of process
+        var processes =[];
+        var processes2 =[];
+        for (var i=0; i<group_by_process_name.length; i++) {
+            var obj = {};
+            var obj2 = {};
+            obj.name = group_by_process_name[i];
+            obj.index = i;
+            obj2.index = i;
+            obj.refs = matrix[i];
+            var sumRefs = 0;
+            for (var j = 0; j < obj.refs.length; j++) {
+                if (obj.refs[j].value!=0){
+                    sumRefs+=obj.refs[j].value.length;
+                }
+            }
+            obj.sumRefs = sumRefs;
+            obj2.sumRefs = sumRefs;
+            processes.push(obj);
+            processes2.push(obj2);
+        }
+
+        // Order processes2 by the total of references
+        processes2.sort(function (a, b) {
+             if (a.sumRefs < b.sumRefs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+
+        // Copy the order from processes2 to processes
+        for (var i=0; i<processes2.length; i++) {
+            var index = processes2[i].index;
+            processes[index].indexSumRefs = i;
+        }
+
+        // Order options
+        var orderOption =1;
+
         var ColorScale = d3.scaleLinear()
             .domain([0, Math.sqrt(maxvalue)])
             .range([0, 1]);
         var svgMatrix = d3.select('#matrix').append('svg').attr('height',svgheight+300).attr('width',"100%").attr('margin-top',"15px");
         matrix.forEach(function (row,index) {
-            var group = svgMatrix.append('g').attr('height',12).attr('transform','translate(200,'+index*(rect_height+spacing)+')')
+
+            var newIndex;
+            if (orderOption==0){   // default process order
+                newIndex = index;
+            }
+            else if (orderOption==1) {// order by the total lib references
+                newIndex = processes[index].indexSumRefs;
+            }
+            else{
+                newIndex = index;
+            }
+
+
+            var group = svgMatrix.append('g').attr('height',12).attr('transform','translate(200,'+newIndex*(rect_height+spacing)+')')
 
                 var rect = group.selectAll('rect')
                     .data(row)
@@ -633,9 +689,7 @@
                       return  i*(rect_height+spacing);
                     })
                     .attr('fill',function (d) {
-                        if(d.value==0) return 'white';
-                        else
-                        return d3.interpolateOrRd(ColorScale(Math.sqrt(d.value.length)))
+                        return d.value==0 ? 'white' : d3.interpolateOrRd(ColorScale(Math.sqrt(d.value.length)));
                     }).on('mouseenter', function (d,i) {
                        if(d.source==undefined) return;
                         // d3.selectAll('.mat_rect').classed('cell-hover',false);
