@@ -619,12 +619,12 @@
 
      // Tommy 2018 ******************************************
      // Create a new array of process
-        var processes =[];
+        var processes1 =[];
         var processes2 =[];
         for (var i=0; i<group_by_process_name.length; i++) {
             var obj = {};
             var obj2 = {};
-            obj.name = group_by_process_name[i];
+            obj.name = group_by_process_name[i].key;
             obj.index = i;
             obj2.index = i;
             obj.refs = matrix[i];
@@ -636,7 +636,7 @@
             }
             obj.sumRefs = sumRefs;
             obj2.sumRefs = sumRefs;
-            processes.push(obj);
+            processes1.push(obj);
             processes2.push(obj2);
         }
 
@@ -652,11 +652,142 @@
         // Copy the order from processes2 to processes
         for (var i=0; i<processes2.length; i++) {
             var index = processes2[i].index;
-            processes[index].indexSumRefs = i;
+            processes1[index].indexSumRefs = i;
         }
 
+
+        var processes1 = processDif(processes1,0);
+
+
+        function getRefCount(i, j){
+            if (matrix[i][j].value!=0){
+                return matrix[i][j].value.length;
+            }
+            else{
+                return 0;
+            }
+
+        }
+        function getDif(count1, count2){ // penalty function
+            if (count1==0 && count2!=0)
+                return 10000;
+            else if (count1!=0 && count2==0)
+                return 10000;
+            else
+                return Math.abs(count1-count2);
+        }
+
+        function processDif(processArray, firstProcessIndex){
+            processArray[firstProcessIndex].isUsed = true;
+            processArray[firstProcessIndex].indexSimilarity =0;
+
+            var startIndex = firstProcessIndex
+            var count= 1;
+            while (count<processArray.length) {
+                var minDif = 100000000;
+                var minIndex = -1;
+                for (var i=0; i<processArray.length; i++) {
+                    if (processArray[i].isUsed==undefined) { // process is not ordered
+                        // compute processes difference
+                        var dif = 0;
+                        for (var j = 0; j < lib.length; j++) {
+                            var count1 = getRefCount(startIndex, j);
+                            var count2 = getRefCount(i, j);
+                            dif += getDif(count1,count2); // Differential function *************
+                        }
+                        if (dif<minDif){
+                            minDif = dif;
+                            minIndex = i;
+                        }
+                    }
+                }
+                if (minIndex>=0){
+                    console.log(minIndex+" " + processArray[minIndex].name);
+                    processArray[minIndex].isUsed = true;
+                    processArray[minIndex].indexSimilarity = count;
+                    startIndex = minIndex;
+                }
+                count++;
+            }
+            return processArray;
+        }
+
+        function processLib(libArray, firstLibIndex){
+            libArray[firstLibIndex].isUsed = true;
+            libArray[firstLibIndex].indexSimilarity =0;
+
+            var startIndex = firstLibIndex
+            var count= 1;
+            while (count<libArray.length) {
+                var minDif = 100000000;
+                var minIndex = -1;
+                for (var l=0; l<libArray.length; l++) {
+                    if (libArray[l].isUsed==undefined) { // process is not ordered
+                        // compute libs difference
+                        var dif = 0;
+                        for (var i = 0; i < processes1.length; i++) {
+                            var count1 = getRefCount(i, startIndex);
+                            var count2 = getRefCount(i, l);
+                            dif += getDif(count1,count2); // Differential function *************
+                        }
+                        if (dif<minDif){
+                            minDif = dif;
+                            minIndex = l;
+                        }
+                    }
+                }
+                if (minIndex>=0){
+                    libArray[minIndex].isUsed = true;
+                    libArray[minIndex].indexSimilarity = count;
+                    startIndex = minIndex;
+                }
+                count++;
+            }
+            return libArray;
+        }
+
+
+
+        // Create a new array of libs
+        var libs =[];
+        var libs2 =[];
+        for (var l=0; l<lib.length; l++) {
+            var obj = {};
+            var obj2 = {};
+            obj.name = lib[l];
+            obj.index = l;
+            obj2.index = l;
+            var sumRefs = 0;
+            for (var i = 0; i < processes1.length; i++) {
+                if (matrix[i][l].value!=0){
+                    sumRefs+= matrix[i][l].value.length;
+                }
+            }
+            obj.sumRefs = sumRefs;
+            obj2.sumRefs = sumRefs;
+            libs.push(obj);
+            libs2.push(obj2);
+        }
+        // Order libs2 by the total of references
+        libs2.sort(function (a, b) {
+            if (a.sumRefs < b.sumRefs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+        // Copy the order from libs2 to processes
+        for (var i=0; i<libs2.length; i++) {
+            var index = libs2[i].index;
+            libs[index].indexSumRefs = i;
+        }
+        libs = processLib(libs,0);
+        debugger;
+
+        //debugger;
+
         // Order options
-        var orderOption =1;
+        var orderOption =2;
 
         var ColorScale = d3.scaleLinear()
             .domain([0, Math.sqrt(maxvalue)])
@@ -664,15 +795,12 @@
         var svgMatrix = d3.select('#matrix').append('svg').attr('height',svgheight+300).attr('width',"100%").attr('margin-top',"15px");
         matrix.forEach(function (row,index) {
 
-            var newIndex;
-            if (orderOption==0){   // default process order
-                newIndex = index;
-            }
-            else if (orderOption==1) {// order by the total lib references
-                newIndex = processes[index].indexSumRefs;
+            var newIndex = index;
+            if (orderOption==1) {// order by the total lib references
+                newIndex = processes1[index].indexSumRefs;
             }
             else{
-                newIndex = index;
+                newIndex = processes1[index].indexSimilarity;
             }
 
 
@@ -686,7 +814,15 @@
                     .attr('width',rect_width)
                     .attr('height',rect_height)
                     .attr('x',function (d,i) {
-                      return  i*(rect_height+spacing);
+                        var newIndex = i;
+                        if (orderOption==1) {// order by the total lib references
+                            newIndex = libs[i].indexSumRefs;
+                        }
+                        else{
+                            newIndex = libs[i].indexSimilarity;
+                        }
+
+                      return  newIndex*(rect_height+spacing);
                     })
                     .attr('fill',function (d) {
                         return d.value==0 ? 'white' : d3.interpolateOrRd(ColorScale(Math.sqrt(d.value.length)));
