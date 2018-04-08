@@ -2,7 +2,6 @@ function applicationManager(globalData) {
     var settings = {
         ProcessArea: {
             svg_height: 200,
-            svg_width: 1700,
             left: 120,
             bar_height: 35,
             scale_xMin: 10,
@@ -99,14 +98,22 @@ function applicationManager(globalData) {
             return d.Process;
         }).entries(inputData);
 
-        var drawStats = (function () {
-            console.log("hello boy")
+        var getdatabydomain =(function () {
+                var domains ={};
+            inputData.forEach(function (t) {
+                if(t.hasOwnProperty('Domain')){
+                    if(!domains.hasOwnProperty(t.Domain)){
+                        domains[t.Domain] = t;
+                    }
+                }
+            });
+                return domains;
         })();
         return {
             getdatabyOperation: groupbyOperation,
             getdatabyProcessName: group_by_process_name,
             getdatabyProcess: group_by_process,
-            drawStats: drawStats
+            getdatabyDomain : getdatabydomain
         }
     }
     function getIndexByName(inputData, name) {
@@ -347,8 +354,8 @@ function applicationManager(globalData) {
                 })])
                 .range([settings.ProcessArea.scale_xMin, settings.ProcessArea.scale_xMax]);
 
-
-            var svgStats = d3.select(position).append('svg').attr('width', settings.ProcessArea.svg_width).attr('height', settings.ProcessArea.svg_height);
+            d3.select(position).selectAll("*").remove();
+            var svgStats = d3.select(position).append('svg').attr('width', '100%').attr('height', settings.ProcessArea.svg_height);
             group_by_process.forEach(function (process, index) {
                 var group = svgStats.append('g').attr("transform", "translate(0," + index * bar_height + ")");
                 var child_process = d3.nest().key(function (d) {
@@ -386,7 +393,13 @@ function applicationManager(globalData) {
                 })
                 group.append('text').text(process.key + " (" + process.values.length + ")").attr('x', 0).attr('y', 18);
             })
-            var group_O = svgStats.append('g').attr('transform', 'translate(' + window.innerWidth * 0.85 + ',0)')
+
+
+        },
+        drawStats2:function (position) {
+            d3.select(position).selectAll("*").remove();
+            var svgStats = d3.select(position).append('svg').attr('width', '100%').attr('height', settings.ProcessArea.svg_height);
+            var group_O = svgStats.append('g');
             var group_by_operation = [{'key': 'WriteFile'}, {'key': 'CreateFile'}, {'key': 'SetRenameInformationFile'}, {'key': 'Load Image'}, {'key': 'Process Create'},
                 {'key': 'RegCreateKey'}, {'key': 'RegDeleteValue'}, {'key': 'RegDeleteKey'}, {'key': 'UDP Send'}, {'key': 'UDP Receive'}, {'key': 'TCP Receive'}, {'key': 'TCP Send'}, {'key': 'TCP Connect'}]
 
@@ -588,7 +601,7 @@ function applicationManager(globalData) {
                                 return rect_height;
                         }
                         else {
-                            return rect_height - 5;
+                            return rect_height - 8;
                         }
                     })
                     .style('fill-opacity', 0.6)
@@ -599,11 +612,12 @@ function applicationManager(globalData) {
 
                             div.transition()
                                 .duration(200)
-                                .style("opacity", 1).style('height', '100px').style('width', '250px');
+                                .style("opacity", 1).style('height', '120px').style('width', '250px');
                             div.html('<table><tr><td colspan="4">Source: https://www.virustotal.com</td></tr><tr><td><img src="images/clean.png" width="20" height="20"/></td><td> Clean (' + d.VirusTotal.harmless + ')</td>' +
                                 '<td><img src="images/malicious.png" width="20" height="20"/></td><td><font color="red"><b>Malicious (' + d.VirusTotal.malicious + ')</b> </font></td></tr>' +
                                 '<tr><td><img src="images/suspicious.png" width="20" height="20"/></td><td> Suspicious (' + d.VirusTotal.suspicious + ')</td>' +
-                                '<td><img src="images/question.png" width="20" height="20"/></td><td> Undetected (' + d.VirusTotal.undetected + ')</td></tr><tr><td colspan="4">Target domain: ' + d.Domain + '</td></tr></table>')
+                                '<td><img src="images/question.png" width="20" height="20"/></td><td> Undetected (' + d.VirusTotal.undetected + ')</td></tr><tr><td colspan="4">Target domain: ' + d.Domain + '</td></tr>' +
+                                '<td colspan="4">Connecting time: ' + d.Timestamp + '</td></tr></table>')
                                 .style("left", (d3.event.pageX) + "px")
                                 .style("top", (d3.event.pageY - 28) + "px");
                         }
@@ -720,6 +734,26 @@ function applicationManager(globalData) {
                 return link.value.length > min;
             });
             loadMatrix(global_links);
+
+        },
+        updateDomainBox:function (position) {
+            d3.select(position).selectAll("*").remove();
+            var domainList = getData.getdatabyDomain;
+                var selection = document.querySelector(position);
+            var count=1;
+            for (var key in domainList){
+                var option = document.createElement('option');
+                option.textContent =count+". "+key;
+                option.value =domainList[key].Step;
+                option.title =domainList[key].Process_Name + " ["+ domainList[key].Timestamp+ "]";
+                if(domainList[key].VirusTotal.malicious >0){
+                    option.className='malicious';
+                    option.textContent =count+". "+key + '-> malicious by Virus Total';
+                }
+                selection.appendChild(option);
+                count++;
+            }
+
 
         }
 

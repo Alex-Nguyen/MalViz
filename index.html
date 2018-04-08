@@ -66,27 +66,63 @@
         text.active{
             opacity: 1;
         }
+        select{
+            width: 300px;
+            height:200px;
+        }
+        option.malicious{
+            color:red;
+            font-weight: bold;
+        }
+        option.undetected{
+            color:gray;
+        }
+        option.suspicious{
+            color:yellow;
+        }
     </style>
 </head>
 <body>
+<input type="file" id="fileUpload">
 <fieldset>
     <legend>Data Overview - Number of API calls in each type</legend>
-    <div id="top-left"></div>
-    <div id="top-right"></div>
+<table width="100%" border="0px" style="height: 200px">
+    <tr>
+        <td width="65%">
+            <div id="stats"></div>
+        </td>
+        <td width="15%">
+            <div id="OperationList"></div>
+        </td>
+        <td width="20%">
+            Connecting domains:
+            <div >
+                <select id="maliciousdomain" size="15"></select>
+            </div>
 
-    <div id="stats"></div>
-    <div id="OperationList"></div>
+        </td>
+    </tr>
+</table>
+
+
 </fieldset>
 
 <fieldset>
     <legend>
         Heat Map
     </legend>
-    <div  style="width: 100%;position:relative;">
-        <div style="width: 100%;border: 1px;float: left" id="heatmap"></div>
+<table width="100%" border="0px">
+    <tbody>
+    <tr>
+        <td width="100%">
+            <div id="heatmap"></div>
+        </td>
+    </tr>
+    </tbody>
+</table>
 
-        <div style="width: 100%;float: right;padding: 15px" id="matrix"></div>
-    </div>
+
+
 
 </fieldset>
 <fieldset>
@@ -114,67 +150,75 @@
     var div = d3.select("body").append("div")
         .attr("class", "tooltip")
         .style("opacity", 0);
-    d3.queue()
-    //.defer(d3.csv, "data/log1data.csv", function (d) {
-    //.defer(d3.csv, "data/Logfile_Test2.csv", function (d) {
-        .defer(d3.csv, "data/Logfile_V1.csv", function (d) {
-            return {
-                Timestamp: d['Time_of_Day'],
-                PID: d['PID'],
-                Process_Name: d['Process_Name'],
-                Operation: d["Operation"],
-                Path: d["Path"],
-                Detail: d["Detail"]
-            }
-        })
-        .defer(d3.csv, "data/domain.csv")
-        .await(function (error, data, domain) {
-            if (error) {
-                console.error('Oh dear, something went wrong: ' + error);
-            }
-            else {
-                data = ProcessData(data,domain); //Clean data
-                var SiteManager = applicationManager(data); //Initialize application
-                SiteManager.drawStats('#stats'); //Draw statistic map
-                SiteManager.drawMain('#heatmap');//Draw mainMap
-                var maxcalls = SiteManager.getCallRange().maxcall;
-               // SiteManager.updateRangeFilter($( "#slider-range" ).slider( "values", 0 ),$( "#slider-range" ).slider( "values", 1 ))
-                $("#btnName").click( function()
-                    {
-                       SiteManager.sort2DMatrix('name')
-                    }
-                );
-                $("#btnNum").click( function()
-                    {
-                        SiteManager.sort2DMatrix('numlinks')
-                    }
-                );
-                $("#btnCount").click( function()
-                    {
-                        SiteManager.sort2DMatrix('numcount')
-                    }
-                );
-                $("#btnSimilarity").click( function()
-                    {
-                        SiteManager.sort2DMatrix('similarity')
-                    }
-                );
-                $("#slider-range" ).slider({
-                    range: true,
-                    min: 0,
-                    max: maxcalls,
-                    values: [3, maxcalls ],
-                    slide: function( event, ui ) {
-                        SiteManager.updateRangeFilter(ui.values[ 0 ],ui.values[ 1 ])
-                        $( "#amount" ).val( ui.values[ 0 ] + " - " + ui.values[ 1 ] );
-                    }
-                });
-                $( "#amount" ).val( $( "#slider-range" ).slider( "values", 0 ) +
-                    " - " + $( "#slider-range" ).slider( "values", 1 ) );
+    $('input[type=file]').change(function () {
+        init(this.files[0].name);
+    })
+    var init = function (filePath) {
+        d3.queue()
+            .defer(d3.csv, "data/"+filePath, function (d) {
+                return {
+                    Timestamp: d['Time_of_Day'],
+                    PID: d['PID'],
+                    Process_Name: d['Process_Name'],
+                    Operation: d["Operation"],
+                    Path: d["Path"],
+                    Detail: d["Detail"]
+                }
+            })
+            .defer(d3.csv, "data/domain.csv")
+            .await(function (error, original_data, domain) {
+                if (error) {
+                    console.error('Oh dear, something went wrong: ' + error);
+                }
+                else {
 
-                SiteManager.updateRangeFilter($( "#slider-range" ).slider( "values", 0 ),$( "#slider-range" ).slider( "values", 1 ))
-            }
-        });
+                    ProcessDataV2(original_data,domain) ;
+                    var data = ProcessDataV2(original_data,domain) ;
+
+                    var SiteManager = applicationManager(data); //Initialize application
+                    SiteManager.drawStats('#stats'); //Draw statistic map
+                    SiteManager.drawStats2('#OperationList'); //Draw statistic map
+                    SiteManager.drawMain('#heatmap');//Draw mainMap
+                    var maxcalls = SiteManager.getCallRange().maxcall;
+                    SiteManager.updateDomainBox('#maliciousdomain');
+                    $("#btnName").click( function()
+                        {
+                            SiteManager.sort2DMatrix('name')
+                        }
+                    );
+                    $("#btnNum").click( function()
+                        {
+                            SiteManager.sort2DMatrix('numlinks')
+                        }
+                    );
+                    $("#btnCount").click( function()
+                        {
+                            SiteManager.sort2DMatrix('numcount')
+                        }
+                    );
+                    $("#btnSimilarity").click( function()
+                        {
+                            SiteManager.sort2DMatrix('similarity')
+                        }
+                    );
+                    $("#slider-range" ).slider({
+                        range: true,
+                        min: 0,
+                        max: maxcalls,
+                        values: [3, maxcalls ],
+                        slide: function( event, ui ) {
+                            SiteManager.updateRangeFilter(ui.values[ 0 ],ui.values[ 1 ])
+                            $( "#amount" ).val( ui.values[ 0 ] + " - " + ui.values[ 1 ] );
+                        }
+                    });
+                    $( "#amount" ).val( $( "#slider-range" ).slider( "values", 0 ) +
+                        " - " + $( "#slider-range" ).slider( "values", 1 ) );
+
+                    SiteManager.updateRangeFilter($( "#slider-range" ).slider( "values", 0 ),$( "#slider-range" ).slider( "values", 1 ))
+                }
+            });
+    }
+
 
     function getProcessName(operation) {
         switch (operation) {
@@ -607,6 +651,7 @@
 
 
     }
+
 </script>
 </body>
 </html>
