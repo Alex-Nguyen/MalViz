@@ -1,2 +1,2 @@
 # DigitalForensics
-https://alex-nguyen.github.io/DFP1/
+https://alex-nguyen.github.io/Malviz
