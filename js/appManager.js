@@ -15,6 +15,7 @@ function applicationManager(globalData) {
             rect_height:15
         }
     };
+    var globalmatrix,globalib,globalgroupbyprocessname;
     var getData = DataRetrieval(globalData);
     var global_links =ExtractGraph(globalData).links;
     function ExtractGraph(globalData) {
@@ -136,30 +137,29 @@ function applicationManager(globalData) {
             return b[property] - a[property];
         })
     }
-    function sortArrayBySimilarity(source, target, links) {
-        var local_links = links;
-        local_links.forEach(function (link) {
-            link.source = getIndexByName(source, link.source);
-            link.target = getIndexByName(target, link.target);
-        });
-        var matrix = create2DMatrix(source.length, target.length, local_links);
+    function sortArrayBySimilarity(source, target, inputData) {
+        // console.log(globalmatrix);
+        // console.log(globalib);
+        // console.log(globalgroupbyprocessname);
+
+        d3.select("#matrix2D").selectAll("*").remove();
         var processes1 =[];
         var processes2 =[];
         var processes3 =[];
-        for (var i=0; i<source.length; i++) {
+        for (var i=0; i<globalgroupbyprocessname.length; i++) {
             var obj = {};
             var obj2 = {};
             var obj3 = {};
-            obj.name = source[i].name;
+            obj.name = globalgroupbyprocessname[i].key;
             obj.index = i;
             obj2.index = i;
             obj3.index = i;
-            obj.refs = matrix[i];
+            obj.refs = globalmatrix[i];
             var sumRefs = 0;
             var sumLibs = 0;
             for (var j = 0; j < obj.refs.length; j++) {
-                if (obj.refs[j].length!=0){
-                    sumRefs+=obj.refs[j].length;
+                if (obj.refs[j].value!=0){
+                    sumRefs+=obj.refs[j].value.length;
                     sumLibs++;
                 }
             }
@@ -171,7 +171,199 @@ function applicationManager(globalData) {
             processes2.push(obj2);
             processes3.push(obj3);
         }
-        console.log(processes1)
+        processes2.sort(function (a, b) {
+            if (a.sumRefs < b.sumRefs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+        // Order processes3 by the total of libs
+        processes3.sort(function (a, b) {
+            if (a.sumLibs < b.sumLibs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+
+
+        // Copy the order from processes2 to processes
+        for (var i=0; i<processes2.length; i++) {
+            var index = processes2[i].index;
+            processes1[index].indexSumRefs = i;
+        }
+        // Copy the order from processes3 to processes
+        for (var i=0; i<processes3.length; i++) {
+            var index = processes3[i].index;
+            processes1[index].indexSumLibs = i;
+        }
+        function getRefCount(i, j){
+            if (globalmatrix[i][j].value!=0){
+                return globalmatrix[i][j].value.length;
+            }
+            else{
+                return 0;
+            }
+
+        }
+        function getDif(count1, count2){ // penalty function
+            if (count1==0 && count2!=0)
+                return 1000;
+            else if (count1!=0 && count2==0)
+                return 1000;
+            else
+                return Math.abs(count1-count2);
+        }
+
+        function processDif(processArray, firstProcessIndex){
+            processArray[firstProcessIndex].isUsed = true;
+            processArray[firstProcessIndex].indexSimilarity =0;
+
+            var startIndex = firstProcessIndex
+            var count= 1;
+            while (count<processArray.length) {
+                var minDif = 100000000;
+                var minIndex = -1;
+                for (var i=0; i<processArray.length; i++) {
+                    if (processArray[i].isUsed==undefined) { // process is not ordered
+                        // compute processes difference
+                        var dif = 0;
+                        for (var j = 0; j < globalib.length; j++) {
+                            var count1 = getRefCount(startIndex, j);
+                            var count2 = getRefCount(i, j);
+                            dif += getDif(count1,count2); // Differential function *************
+                        }
+                        if (dif<minDif){
+                            minDif = dif;
+                            minIndex = i;
+                        }
+                    }
+                }
+                if (minIndex>=0){
+                    console.log(minIndex+" " + processArray[minIndex].name);
+                    processArray[minIndex].isUsed = true;
+                    processArray[minIndex].indexSimilarity = count;
+                    startIndex = minIndex;
+                }
+                count++;
+            }
+            return processArray;
+        }
+
+        function processLib(libArray, firstLibIndex){
+            libArray[firstLibIndex].isUsed = true;
+            libArray[firstLibIndex].indexSimilarity =0;
+
+            var startIndex = firstLibIndex
+            var count= 1;
+            while (count<libArray.length) {
+                var minDif = 100000000;
+                var minIndex = -1;
+                for (var l=0; l<libArray.length; l++) {
+                    if (libArray[l].isUsed==undefined) { // process is not ordered
+                        // compute libs difference
+                        var dif = 0;
+                        for (var i = 0; i < processes1.length; i++) {
+                            var count1 = getRefCount(i, startIndex);
+                            var count2 = getRefCount(i, l);
+                            dif += getDif(count1,count2); // Differential function *************
+                        }
+                        if (dif<minDif){
+                            minDif = dif;
+                            minIndex = l;
+                        }
+                    }
+                }
+                if (minIndex>=0){
+                    libArray[minIndex].isUsed = true;
+                    libArray[minIndex].indexSimilarity = count;
+                    startIndex = minIndex;
+                }
+                count++;
+            }
+            return libArray;
+        }
+        var libs =[];
+        var libs2 =[];
+        for (var l=0; l<globalib.length; l++) {
+            var obj = {};
+            var obj2 = {};
+            obj.name = globalib[l];
+            obj.index = l;
+            obj2.index = l;
+            var sumRefs = 0;
+            for (var i = 0; i < processes1.length; i++) {
+                if (globalmatrix[i][l].value!=0){
+                    sumRefs+= globalmatrix[i][l].value.length;
+                }
+            }
+            obj.sumRefs = sumRefs;
+            obj2.sumRefs = sumRefs;
+            libs.push(obj);
+            libs2.push(obj2);
+        }
+        // Order libs2 by the total of references
+        libs2.sort(function (a, b) {
+            if (a.sumRefs < b.sumRefs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+        // Copy the order from libs2 to processes
+        for (var i=0; i<libs2.length; i++) {
+            var index = libs2[i].index;
+            libs[index].indexSumRefs = i;
+        }
+        //var processes1 = processDif(processes1,processes3[0].index);
+        processes1 = processDif(processes1,0);
+        libs = processLib(libs,0);
+
+        // Order options
+        var orderOption =2;
+        function getProcessIndex(index){  // order of process in row of the matrix
+            var newIndex;
+            if (orderOption==0) {// default order of processes
+                newIndex = index;
+            }
+            else if (orderOption==1) {// order by the total lib references
+                newIndex = processes1[index].indexSumRefs;
+            }
+            else{
+                newIndex = processes1[index].indexSimilarity;
+            }
+            return newIndex;
+        }
+        function getLibIndex(index){  // order of process in column of the matrix
+            var newIndex;
+            if (orderOption==0) {// default order of processes
+                newIndex = index;
+            }
+            else if (orderOption==1) {// order by the total lib references
+                newIndex = libs[index].indexSumRefs;
+            }
+            else{
+                newIndex = libs[index].indexSimilarity;
+            }
+            return newIndex;
+        }
+        for(var i=0;i<10;i++){
+            console.log(getProcessIndex(i));
+        }
+
+        // var margintop=10;
+        // var ColorScale = d3.scaleLinear()
+        //     .domain([0, Math.sqrt(250)])
+        //     .range([0, 1]);
+        // var svg_height=globalgroupbyprocessname.length*(settings.MatrixArea.rect_height + settings.MatrixArea.padding) + 360;
+        // var svg_width = globalib.length*(settings.MatrixArea.rect_width + settings.MatrixArea.padding) + settings.MatrixArea.row_text_width +20;
+        // var svgMatrix = d3.select("#matrix2D")
+        //     .append('svg')
+        //     .attr('height', svg_height)
+        //     .attr('width', svg_width);
+        // var svg_g = svgMatrix.append('g').attr('transform','translate(0,10)');
+
     }
     function sortArrayByLinkSize(inputData) {
         return inputData.sort(function (a, b) {
@@ -213,7 +405,8 @@ function applicationManager(globalData) {
             .append('svg')
             .attr('height', svg_height)
             .attr('width', svg_width);
-        var svg_g = svgMatrix.append('g').attr('transform','translate(0,10)')
+        var svg_g = svgMatrix.append('g').attr('transform','translate(0,10)');
+
         //Draw x labels
         var textGroup = svg_g.append('g').attr('transform', 'translate('+(settings.MatrixArea.row_text_width+10)+',' + (rowLabel.length*(settings.MatrixArea.rect_height + settings.MatrixArea.padding)+5) + ')')
         var cols = textGroup.selectAll('text').data(colLabel)
@@ -538,7 +731,7 @@ function applicationManager(globalData) {
                 return b.values.length - a.values.length
             })
             var matrix = make2Darray(group_by_process_name.length, library.length);
-            var svg_process_name = d3.select('#heatmap').append('svg').attr('width', "100%").attr('height', svgheight).attr("border", 1);
+            var svg_process_name = d3.select('#heatmap').append('svg').attr('margin-left','20px').attr('width', "100%").attr('height', svgheight).attr("border", 1);
             svg_process_name.append("svg:defs").append("svg:marker")
                 .attr("id", "arrow")
                 .attr("refX", 0)
@@ -660,7 +853,7 @@ function applicationManager(globalData) {
 
                 }
 
-            })
+            });
 
             for (var i = 0; i < lines.length; i++) {
                 var obj = new Object();
@@ -672,6 +865,10 @@ function applicationManager(globalData) {
                 //     .attr('x1', max_scale+60).attr('source', lines[i].source).attr('target', lines[i].target).attr('y1', lines[i].source * group_rect_height + rect_height / 2)
                 //     .attr('x2', window.innerWidth-210).attr('y2', lines[i].target * ((dll_height + padding)) + (dll_height + padding) / 4)
             }
+            globalmatrix = matrix;
+            globalib = libarr;
+            globalgroupbyprocessname = group_by_process_name;
+            //console.log(matrix)
             //drawMatrix(matrix, libarr, group_by_process_name);
 
         },

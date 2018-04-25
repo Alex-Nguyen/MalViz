@@ -66,9 +66,12 @@
         text.active{
             opacity: 1;
         }
-        select{
+        select.malware{
             width: 300px;
             height:200px;
+        }
+        select.selectmalware{
+            width: 300px;
         }
         option.malicious{
             color:red;
@@ -83,7 +86,13 @@
     </style>
 </head>
 <body>
-<input type="file" id="fileUpload">
+Please select dataset:
+<select id="selectmalware" class="selectmalware">
+    <option value="Logfile_V1.CSV">--Select dataset--</option>
+    <option value="NormalActivity.CSV">Normal operation</option>
+    <option value="Logfile_V1.CSV">Operations with one Malware</option>
+    <option value="Logfile_V2.CSV">Operations with three Malware</option>
+</select>
 <fieldset>
     <legend>Data Overview - Number of API calls in each type</legend>
 <table width="100%" border="0px" style="height: 200px">
@@ -97,7 +106,7 @@
         <td width="20%">
             Connecting domains:
             <div >
-                <select id="maliciousdomain" size="15"></select>
+                <select id="maliciousdomain" class="malware" size="15"></select>
             </div>
 
         </td>
@@ -150,9 +159,13 @@
     var div = d3.select("body").append("div")
         .attr("class", "tooltip")
         .style("opacity", 0);
-    $('input[type=file]').change(function () {
-        init(this.files[0].name);
-    })
+
+    $('select#selectmalware').on('change', function (e) {
+        var optionSelected = $("option:selected", this);
+        var valueSelected = this.value;
+        init(valueSelected);
+
+    });
     var init = function (filePath) {
         d3.queue()
             .defer(d3.csv, "data/"+filePath, function (d) {
