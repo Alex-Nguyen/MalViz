@@ -142,7 +142,7 @@ Please select dataset:
     <button type="button" id="btnName">Sort by Name</button>&nbsp;
     <button type="button" id="btnNum">Sort by Diff of Libraries called</button>&nbsp;
     <button type="button" id="btnCount">Sort by Count of Libraries called</button>&nbsp;
-    <button type="button" id="btnSimilarity">Sort by Similarity</button>&nbsp;
+    <!--<button type="button" id="btnSimilarity">Sort by Similarity</button>&nbsp;-->
     <p>
         <label for="amount">Number of libraries called:</label>
         <input type="text" id="amount" readonly style="border:0; color:#f6931f; font-weight:bold;">
@@ -209,11 +209,11 @@ Please select dataset:
                             SiteManager.sort2DMatrix('numcount')
                         }
                     );
-                    $("#btnSimilarity").click( function()
-                        {
-                            SiteManager.sort2DMatrix('similarity')
-                        }
-                    );
+                    // $("#btnSimilarity").click( function()
+                    //     {
+                    //         SiteManager.sort2DMatrix('similarity')
+                    //     }
+                    // );
                     $("#slider-range" ).slider({
                         range: true,
                         min: 0,

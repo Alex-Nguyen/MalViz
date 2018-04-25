@@ -805,7 +805,7 @@ function applicationManager(globalData) {
 
                             div.transition()
                                 .duration(200)
-                                .style("opacity", 1).style('height', '120px').style('width', '250px');
+                                .style("opacity", 1).style('width', '250px');
                             div.html('<table><tr><td colspan="4">Source: https://www.virustotal.com</td></tr><tr><td><img src="images/clean.png" width="20" height="20"/></td><td> Clean (' + d.VirusTotal.harmless + ')</td>' +
                                 '<td><img src="images/malicious.png" width="20" height="20"/></td><td><font color="red"><b>Malicious (' + d.VirusTotal.malicious + ')</b> </font></td></tr>' +
                                 '<tr><td><img src="images/suspicious.png" width="20" height="20"/></td><td> Suspicious (' + d.VirusTotal.suspicious + ')</td>' +
