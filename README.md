@@ -5,4 +5,5 @@ This demonstration paper introduces Malviz, a visual analytic tool for analyzing
 ## Video demo
 [![Everything Is AWESOME](https://github.com/Alex-Nguyen/Malviz/blob/master/images/VideoPlay.jpg?raw=true)](http://myweb.ttu.edu/vinhtngu/malviz/video/malviz.mp4)
 
+## Application Demo
 https://alex-nguyen.github.io/Malviz
