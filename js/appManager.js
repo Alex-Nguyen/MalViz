@@ -551,32 +551,30 @@ function applicationManager(globalData) {
         var ColorScale = d3.scaleLinear()
             .domain([0, Math.sqrt(250)])
             .range([0, 1]);
+
+
         var local_links = JSON.parse(JSON.stringify(input_links));
         var nodes = createNodesFromLinks(local_links);
         local_links.forEach(function (link) {
             link.source = getIndexByName(nodes.sources, link.source);
             link.target = getIndexByName(nodes.targets, link.target);
         });
+
         // var matrix = create2DMatrix(nodes.sources.length, nodes.targets.length, local_links);
         var margin = {
                 top: 400,
                 right: 0,
                 bottom: 0,
-                left: 400
+                left: 250
             },
-            width = 1200,
-            height = 350;
+            width = 1100,
+            height = 250;
         var svg = d3.select("#matrix2D").append("svg")
             .attr("width", width + margin.left + margin.right)
             .attr("height", height + margin.top + margin.bottom)
             .append("g")
             .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-        // svg.append("rect")
-        //     .attr("class", "background")
-        //     .attr("width", width)
-        //     .attr("height", height);
 
-        var matrixV1 = [];
         var matrix = [];
         var x_length = nodes.targets.length;
         var y_length = nodes.sources.length;
@@ -839,8 +837,8 @@ function applicationManager(globalData) {
                 return "translate(0," + y_scale(i) + ")";
             })
             .each(row);
-        rows.append("line")
-            .attr("x2", width);
+        // rows.append("line")
+        //     .attr("x2", width);
         rows.append("text")
             .attr("x", -6)
             .attr("y", y_scale.bandwidth() / 2)
@@ -856,8 +854,8 @@ function applicationManager(globalData) {
             .attr("transform", function (d, i) {
                 return "translate(" + x_scale(i) + ")rotate(-90)";
             });
-        column.append("line")
-            .attr("x1", -width);
+        // column.append("line")
+        //     .attr("x1", -width);
         column.append("text")
             .attr("x", 6)
             .attr("y", x_scale.bandwidth() / 2)
@@ -873,7 +871,7 @@ function applicationManager(globalData) {
         });
         var timeout = setTimeout(function () {
             order("group");
-            d3.select("#order").property("selectedIndex", 2).node().focus();
+            d3.select("#order").property("selectedIndex", 0).node().focus();
         }, 5000);
 
         function order(value) {
@@ -970,6 +968,7 @@ function applicationManager(globalData) {
         function mouseout() {
             d3.selectAll("text").classed("active", false);
         }
+        d3.select('#loading').remove();
     }
 
     function drawMatrixOld(matrix, lib, group_by_process_name) {

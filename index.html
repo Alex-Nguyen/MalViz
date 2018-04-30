@@ -16,27 +16,57 @@
     <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 
     <style>
-        .background {
-            fill: #eee;
+        #loading {
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            position: fixed;
+            display: block;
+            opacity: 0.7;
+            background-color: #fff;
+            z-index: 99;
+            text-align: center;
         }
 
-        line {
-            stroke: #fff;
+        #loading-image {
+            position: absolute;
+            top: 100px;
+            left: 240px;
+            z-index: 100;
+        }
+        #custom-handle {
+            width: 3em;
+            height: 1.6em;
+            top: 50%;
+            margin-top: -.8em;
+            text-align: center;
+            line-height: 1.6em;
+        }
+        .background {
+            fill: #eee;
         }
 
         text.active {
             fill: red;
         }
+
         line {
             stroke: #999;
             stroke-opacity: .6;
         }
 
+        .cell {
+            stroke-width: 0px;
+        }
+
         .dllline {
             stroke: #000;
         }
-        rect{
+
+        rect {
             z-index: 1;
+            border: 0px;
         }
 
         div.tooltip {
@@ -51,44 +81,54 @@
             border-radius: 8px;
             pointer-events: none;
         }
-        .cell-hover{
-            color:red;
-            fill:red;
+
+        .cell-hover {
+            color: red;
+            fill: red;
         }
+
         text.text-highlight {
             fill: red;
             font-weight: bold;
         }
-        text.rowLabel{
-            font-size: 12px;
-        }
-        text.colLabel{
+
+        text.rowLabel {
             font-size: 12px;
         }
 
-        text.active{
+        text.colLabel {
+            font-size: 12px;
+        }
+
+        text.active {
             opacity: 1;
         }
-        select.malware{
+
+        select.malware {
             width: 300px;
-            height:200px;
+            height: 200px;
         }
-        select.selectmalware{
+
+        select.selectmalware {
             width: 300px;
         }
-        option.malicious{
-            color:red;
+
+        option.malicious {
+            color: red;
             font-weight: bold;
         }
-        option.undetected{
-            color:gray;
+
+        option.undetected {
+            color: gray;
         }
-        option.suspicious{
-            color:yellow;
+
+        option.suspicious {
+            color: yellow;
         }
     </style>
 </head>
 <body>
+
 Please select dataset:
 <select id="selectmalware" class="selectmalware">
     <option value="Logfile_V1.CSV">--Select dataset--</option>
@@ -98,23 +138,23 @@ Please select dataset:
 </select>
 <fieldset>
     <legend>Data Overview - Number of API calls in each type</legend>
-<table width="100%" border="0px" style="height: 200px">
-    <tr>
-        <td width="65%">
-            <div id="stats"></div>
-        </td>
-        <td width="15%">
-            <div id="OperationList"></div>
-        </td>
-        <td width="20%">
-            Connecting domains:
-            <div >
-                <select id="maliciousdomain" class="malware" size="15"></select>
-            </div>
+    <table width="100%" border="0px" style="height: 200px">
+        <tr>
+            <td width="65%">
+                <div id="stats"></div>
+            </td>
+            <td width="15%">
+                <div id="OperationList"></div>
+            </td>
+            <td width="20%">
+                Connecting domains:
+                <div>
+                    <select id="maliciousdomain" class="malware" size="15"></select>
+                </div>
 
-        </td>
-    </tr>
-</table>
+            </td>
+        </tr>
+    </table>
 
 
 </fieldset>
@@ -123,17 +163,15 @@ Please select dataset:
     <legend>
         Heat Map
     </legend>
-<table width="100%" border="0px">
-    <tbody>
-    <tr>
-        <td width="100%">
-            <div id="heatmap"></div>
-        </td>
-    </tr>
-    </tbody>
-</table>
-
-
+    <table width="100%" border="0px">
+        <tbody>
+        <tr>
+            <td width="100%">
+                <div id="heatmap"></div>
+            </td>
+        </tr>
+        </tbody>
+    </table>
 
 
 </fieldset>
@@ -141,28 +179,35 @@ Please select dataset:
     <legend>
         Libraries called
     </legend>
-<div>
-      <p>
-        <label for="amount">Number of libraries called:</label>
-        <input type="text" id="amount" readonly style="border:0; color:#f6931f; font-weight:bold;">
-    </p>
-    <div id="slider-range" style="width: 200px"></div>
-    <aside >
-        <p>Order: <select id="order">
-            <option value="name" selected>By name</option>
-            <option value="frequency">By Frequency</option>
-            <option value="linkDiff">By Different libraries called</option>
-            <option value="similarity">By Similarity</option>
-        </select>
-    </aside>
-</div>
+    <div>
+        
+    
+        <p>
+            <label for="amount">Number of libraries called:</label>
+            <input type="text" id="amount" readonly style="border:0; color:#f6931f; font-weight:bold;">
+        </p>
+        <div id="slider" style="width: 400px; background: linear-gradient(to right, #ffffff 0%, #000000 100%);">
+            <div id="custom-handle" class="ui-slider-handle"></div>
+        </div>
+        <aside>
+            <p>Order: <select id="order">
+                <option value="name">By name</option>
+                <option value="frequency">By Frequency</option>
+                <option value="linkDiff">By Different libraries called</option>
+                <option value="similarity">By Similarity</option>
+            </select>
+        </aside>
+    </div>
     <div id="matrix2D"></div>
 
 </fieldset>
-
+<div id="loading">
+    <img id="loading-image" src="images/ajax-loader.gif" alt="Loading..." />
+</div>
 <script src="js/ultility.js"></script>
 <script src="js/appManager.js"></script>
 <script>
+
     var div = d3.select("body").append("div")
         .attr("class", "tooltip")
         .style("opacity", 0);
@@ -170,12 +215,14 @@ Please select dataset:
     $('select#selectmalware').on('change', function (e) {
         var optionSelected = $("option:selected", this);
         var valueSelected = this.value;
+        var loading = d3.select('body').append('div').attr('id','loading')
+        loading.append('img').attr('id','loading-image').attr('src','images/ajax-loader.gif')
         init(valueSelected);
 
     });
     var init = function (filePath) {
         d3.queue()
-            .defer(d3.csv, "data/"+filePath, function (d) {
+            .defer(d3.csv, "data/" + filePath, function (d) {
                 return {
                     Timestamp: d['Time_of_Day'],
                     PID: d['PID'],
@@ -192,8 +239,8 @@ Please select dataset:
                 }
                 else {
 
-                    ProcessDataV2(original_data,domain) ;
-                    var data = ProcessDataV2(original_data,domain) ;
+                    ProcessDataV2(original_data, domain);
+                    var data = ProcessDataV2(original_data, domain);
 
                     var SiteManager = applicationManager(data); //Initialize application
                     SiteManager.drawStats('#stats'); //Draw statistic map
@@ -201,18 +248,15 @@ Please select dataset:
                     SiteManager.drawMain('#heatmap');//Draw mainMap
                     var maxcalls = SiteManager.getCallRange().maxcall;
                     SiteManager.updateDomainBox('#maliciousdomain');
-                    $("#btnName").click( function()
-                        {
+                    $("#btnName").click(function () {
                             SiteManager.sort2DMatrix('name')
                         }
                     );
-                    $("#btnNum").click( function()
-                        {
+                    $("#btnNum").click(function () {
                             SiteManager.sort2DMatrix('numlinks')
                         }
                     );
-                    $("#btnCount").click( function()
-                        {
+                    $("#btnCount").click(function () {
                             SiteManager.sort2DMatrix('numcount')
                         }
                     );
@@ -221,23 +265,31 @@ Please select dataset:
                     //         SiteManager.sort2DMatrix('similarity')
                     //     }
                     // );
-                    $("#slider-range" ).slider({
-                        range: true,
-                        min: 0,
-                        max: maxcalls,
-                        values: [3, maxcalls ],
-                        slide: function( event, ui ) {
-                            SiteManager.updateRangeFilter(ui.values[ 0 ],ui.values[ 1 ])
-                            $( "#amount" ).val( ui.values[ 0 ] + " - " + ui.values[ 1 ] );
-                        }
-                    });
-                    $( "#amount" ).val( $( "#slider-range" ).slider( "values", 0 ) +
-                        " - " + $( "#slider-range" ).slider( "values", 1 ) );
+                    $( function() {
+                        var handle = $( "#custom-handle" );
+                        $( "#slider" ).slider({
+                            min:0,
+                            value:3,
+                            max:maxcalls,
+                            create: function() {
+                                handle.text( $( this ).slider( "value" ) );
+                            },
+                            slide: function( event, ui ) {
+                                $( "#amount" ).val( "Min: " + ui.value + " - Max: " + maxcalls );
+                                handle.text( ui.value );
+                                SiteManager.updateRangeFilter(ui.value , maxcalls)
+                            }
+                        });
+                        $( "#amount" ).val( "Min: " + 3 + " - Max: " + maxcalls );
+                    } );
 
-                    SiteManager.updateRangeFilter($( "#slider-range" ).slider( "values", 0 ),$( "#slider-range" ).slider( "values", 1 ))
+                    SiteManager.updateRangeFilter(3, maxcalls);
+                    isready =true;
                 }
             });
+
     }
+    init("Logfile_V1.CSV");
 
 
     function getProcessName(operation) {
@@ -344,5 +396,6 @@ Please select dataset:
 
 
 </script>
+
 </body>
 </html>
