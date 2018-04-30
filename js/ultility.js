@@ -2,7 +2,9 @@ function make2Darray(rows, cols) {
     var arr = new Array(rows);
     for(var i=0;i<rows;i++){
         arr[i] = new Array(cols);
-        arr[i].fill({value:0});
+        for(j=0;j<cols;j++){
+            arr[i][j] = {x:j,y:i,z:[]};
+        }
     }
     return arr;
 }

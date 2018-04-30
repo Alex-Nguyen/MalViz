@@ -1,0 +1,637 @@
+<!--Sepideh Comments-->
+<!--Highlight unusual network activities, it hards for normal eyes-->
+<!--Moouse over process -> activities, its name should be showed up-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Malware Visualization</title>
+    <script src="https://d3js.org/d3.v4.js"></script>
+    <script src="https://d3js.org/d3-color.v1.min.js"></script>
+    <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+
+    <style>
+        .highlight-bar {
+
+            fill: black;
+            stroke: white;
+            opacity: 0.1;
+            z-index: -1;
+            position: absolute;
+        }
+        line {
+            stroke: #999;
+            stroke-opacity: .6;
+        }
+
+        .dllline {
+            stroke: #000;
+        }
+        rect{
+            z-index: 1;
+        }
+
+        div.tooltip {
+            position: absolute;
+            text-align: center;
+            width: auto;
+            height: auto;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: #bbb;
+            border: 1px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+        .cell-hover{
+            color:red;
+            fill:red;
+        }
+        text.text-highlight {
+            fill: red;
+            font-weight: bold;
+        }
+        text.rowLabel{
+            font-size: 12px;
+        }
+        text.colLabel{
+            font-size: 12px;
+        }
+
+        text.active{
+            opacity: 1;
+        }
+        select.malware{
+            width: 300px;
+            height:200px;
+        }
+        select.selectmalware{
+            width: 300px;
+        }
+        option.malicious{
+            color:red;
+            font-weight: bold;
+        }
+        option.undetected{
+            color:gray;
+        }
+        option.suspicious{
+            color:yellow;
+        }
+    </style>
+</head>
+<body>
+Please select dataset:
+<select id="selectmalware" class="selectmalware">
+    <option value="Logfile_V1.CSV">--Select dataset--</option>
+    <option value="NormalActivity.CSV">Normal operation</option>
+    <option value="Logfile_V1.CSV">Operations with one Malware</option>
+    <option value="Logfile_V2.CSV">Operations with three Malware</option>
+</select>
+<fieldset>
+    <legend>Data Overview - Number of API calls in each type</legend>
+<table width="100%" border="0px" style="height: 200px">
+    <tr>
+        <td width="65%">
+            <div id="stats"></div>
+        </td>
+        <td width="15%">
+            <div id="OperationList"></div>
+        </td>
+        <td width="20%">
+            Connecting domains:
+            <div >
+                <select id="maliciousdomain" class="malware" size="15"></select>
+            </div>
+
+        </td>
+    </tr>
+</table>
+
+
+</fieldset>
+
+<fieldset>
+    <legend>
+        Heat Map
+    </legend>
+<table width="100%" border="0px">
+    <tbody>
+    <tr>
+        <td width="100%">
+            <div id="heatmap"></div>
+        </td>
+    </tr>
+    </tbody>
+</table>
+
+
+
+
+</fieldset>
+<fieldset>
+    <legend>
+        Libraries called
+    </legend>
+<div>
+    <button type="button" id="btnName">Sort by Name</button>&nbsp;
+    <button type="button" id="btnNum">Sort by Diff of Libraries called</button>&nbsp;
+    <button type="button" id="btnCount">Sort by Count of Libraries called</button>&nbsp;
+    <!--<button type="button" id="btnSimilarity">Sort by Similarity</button>&nbsp;-->
+    <p>
+        <label for="amount">Number of libraries called:</label>
+        <input type="text" id="amount" readonly style="border:0; color:#f6931f; font-weight:bold;">
+    </p>
+    <div id="slider-range" style="width: 200px"></div>
+</div>
+    <br>
+    <div id="matrix2D"></div>
+</fieldset>
+
+<script src="js/ultility.js"></script>
+<script src="js/appManager.js"></script>
+<script>
+    var div = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+
+    $('select#selectmalware').on('change', function (e) {
+        var optionSelected = $("option:selected", this);
+        var valueSelected = this.value;
+        init(valueSelected);
+
+    });
+    var init = function (filePath) {
+        d3.queue()
+            .defer(d3.csv, "data/"+filePath, function (d) {
+                return {
+                    Timestamp: d['Time_of_Day'],
+                    PID: d['PID'],
+                    Process_Name: d['Process_Name'],
+                    Operation: d["Operation"],
+                    Path: d["Path"],
+                    Detail: d["Detail"]
+                }
+            })
+            .defer(d3.csv, "data/domain.csv")
+            .await(function (error, original_data, domain) {
+                if (error) {
+                    console.error('Oh dear, something went wrong: ' + error);
+                }
+                else {
+
+                    ProcessDataV2(original_data,domain) ;
+                    var data = ProcessDataV2(original_data,domain) ;
+
+                    var SiteManager = applicationManager(data); //Initialize application
+                    SiteManager.drawStats('#stats'); //Draw statistic map
+                    SiteManager.drawStats2('#OperationList'); //Draw statistic map
+                    SiteManager.drawMain('#heatmap');//Draw mainMap
+                    var maxcalls = SiteManager.getCallRange().maxcall;
+                    SiteManager.updateDomainBox('#maliciousdomain');
+
+                }
+            });
+    }
+
+
+    function getProcessName(operation) {
+        switch (operation) {
+            case "Process Create":
+                return "Process";
+            case "Load Image":
+                return "Process";
+            case "CreateFile":
+                return "File";
+            case "WriteFile":
+                return "File";
+            case "SetRenameInformationFile":
+                return "File";
+            case "RegCreateKey":
+                return "Registry";
+            case "RegDeleteValue":
+                return "Registry";
+            case "RegDeleteKey":
+                return "Registry";
+            case "UDP Send":
+                return "Network";
+            case "UDP Receive":
+                return "Network";
+            case "TCP Receive":
+                return "Network";
+            case "TCP Connect":
+                return "Network";
+            case "TCP Send":
+                return "Network";
+
+        }
+    }
+
+    function colorPicker(operation) {
+        switch (operation) {
+            case "Process Create":
+                return "rgb(37, 142, 215)";
+            case "Load Image":
+                return "rgb(31, 119, 180)";
+            case "CreateFile":
+                return "rgb(255, 152, 17)";
+            case "WriteFile":
+
+                return "rgb(255, 127, 14)";
+            case "SetRenameInformationFile":
+                return "rgb(255, 181, 20)";
+            case "RegCreateKey":
+                return "rgb(44, 160, 44)";
+            case "RegDeleteValue":
+                return "rgb(53, 191, 53)";
+            case "RegDeleteKey":
+                return "rgb(63, 229, 63)";
+            case "UDP Send":
+                return "rgb(214, 39, 40)";
+            case "UDP Receive":
+                return "rgb(255, 47, 48)";
+            case "TCP Receive":
+                return "rgb(255, 56, 57)";
+            case "TCP Connect":
+                return "rgb(255, 80, 82)";
+            case "TCP Send":
+                return "rgb(255, 67, 68)";
+            default:
+                return "#000000";
+        }
+    }
+
+    function UpdateProcessNameWithChild(processLst, links) {
+        processLst.forEach(function (proc, parentIndex) {
+            proc.childs = [];
+            links.forEach(function (link) {
+                if (proc.key == link.Process_Name) {
+                    var index = getProcessNameIndex(processLst, link.targetProcessName);
+
+                    if (!proc.childs.includes(index) && index != parentIndex) {
+                        //Check for loop insertion
+                        if (processLst[index].hasOwnProperty('childs')) {
+                            if (!processLst[index].childs.includes(parentIndex)) {
+                                proc.childs.push(index)
+                            }
+                        } else {
+                            proc.childs.push(index)
+                        }
+
+                    }
+
+                }
+            })
+        })
+        return processLst;
+    }
+
+    function getProcessNameIndex(processlst, key) {
+        var index;
+        processlst.forEach(function (d, i) {
+            if (d.key == key) {
+                index = i;
+            }
+
+        })
+        return index;
+    }
+    function drawMatrix(matrix,lib,group_by_process_name) {
+        var rect_width=12,
+            rect_height=11,
+            spacing=2,
+            svgheight = (rect_height+spacing)*matrix.length;
+        var maxvalue = d3.max(matrix,function (d) {
+            return d3.max(d,function (e) {
+                return e.value.length;
+            });
+        });
+
+     // Tommy 2018 ******************************************
+     // Create a new array of process
+        var processes1 =[];
+        var processes2 =[];
+        var processes3 =[];
+        for (var i=0; i<group_by_process_name.length; i++) {
+            var obj = {};
+            var obj2 = {};
+            var obj3 = {};
+            obj.name = group_by_process_name[i].key;
+            obj.index = i;
+            obj2.index = i;
+            obj3.index = i;
+            obj.refs = matrix[i];
+            var sumRefs = 0;
+            var sumLibs = 0;
+            for (var j = 0; j < obj.refs.length; j++) {
+                if (obj.refs[j].value!=0){
+                    sumRefs+=obj.refs[j].value.length;
+                    sumLibs++;
+                }
+            }
+            obj.sumRefs = sumRefs;
+            obj.sumLibs = sumLibs;
+            obj2.sumRefs = sumRefs;
+            obj3.sumLibs = sumLibs;
+            processes1.push(obj);
+            processes2.push(obj2);
+            processes3.push(obj3);
+        }
+
+        // Order processes2 by the total of references
+        processes2.sort(function (a, b) {
+             if (a.sumRefs < b.sumRefs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+        // Order processes3 by the total of libs
+        processes3.sort(function (a, b) {
+            if (a.sumLibs < b.sumLibs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+
+
+        // Copy the order from processes2 to processes
+        for (var i=0; i<processes2.length; i++) {
+            var index = processes2[i].index;
+            processes1[index].indexSumRefs = i;
+        }
+        // Copy the order from processes3 to processes
+        for (var i=0; i<processes3.length; i++) {
+            var index = processes3[i].index;
+            processes1[index].indexSumLibs = i;
+        }
+
+
+
+
+        function getRefCount(i, j){
+            if (matrix[i][j].value!=0){
+                return matrix[i][j].value.length;
+            }
+            else{
+                return 0;
+            }
+
+        }
+        function getDif(count1, count2){ // penalty function
+            if (count1==0 && count2!=0)
+                return 1000;
+            else if (count1!=0 && count2==0)
+                return 1000;
+            else
+                return Math.abs(count1-count2);
+        }
+
+        function processDif(processArray, firstProcessIndex){
+            processArray[firstProcessIndex].isUsed = true;
+            processArray[firstProcessIndex].indexSimilarity =0;
+
+            var startIndex = firstProcessIndex
+            var count= 1;
+            while (count<processArray.length) {
+                var minDif = 100000000;
+                var minIndex = -1;
+                for (var i=0; i<processArray.length; i++) {
+                    if (processArray[i].isUsed==undefined) { // process is not ordered
+                        // compute processes difference
+                        var dif = 0;
+                        for (var j = 0; j < lib.length; j++) {
+                            var count1 = getRefCount(startIndex, j);
+                            var count2 = getRefCount(i, j);
+                            dif += getDif(count1,count2); // Differential function *************
+                        }
+                        if (dif<minDif){
+                            minDif = dif;
+                            minIndex = i;
+                        }
+                    }
+                }
+                if (minIndex>=0){
+                    console.log(minIndex+" " + processArray[minIndex].name);
+                    processArray[minIndex].isUsed = true;
+                    processArray[minIndex].indexSimilarity = count;
+                    startIndex = minIndex;
+                }
+                count++;
+            }
+            return processArray;
+        }
+
+        function processLib(libArray, firstLibIndex){
+            libArray[firstLibIndex].isUsed = true;
+            libArray[firstLibIndex].indexSimilarity =0;
+
+            var startIndex = firstLibIndex
+            var count= 1;
+            while (count<libArray.length) {
+                var minDif = 100000000;
+                var minIndex = -1;
+                for (var l=0; l<libArray.length; l++) {
+                    if (libArray[l].isUsed==undefined) { // process is not ordered
+                        // compute libs difference
+                        var dif = 0;
+                        for (var i = 0; i < processes1.length; i++) {
+                            var count1 = getRefCount(i, startIndex);
+                            var count2 = getRefCount(i, l);
+                            dif += getDif(count1,count2); // Differential function *************
+                        }
+                        if (dif<minDif){
+                            minDif = dif;
+                            minIndex = l;
+                        }
+                    }
+                }
+                if (minIndex>=0){
+                    libArray[minIndex].isUsed = true;
+                    libArray[minIndex].indexSimilarity = count;
+                    startIndex = minIndex;
+                }
+                count++;
+            }
+            return libArray;
+        }
+
+
+
+        // Create a new array of libs
+        var libs =[];
+        var libs2 =[];
+        for (var l=0; l<lib.length; l++) {
+            var obj = {};
+            var obj2 = {};
+            obj.name = lib[l];
+            obj.index = l;
+            obj2.index = l;
+            var sumRefs = 0;
+            for (var i = 0; i < processes1.length; i++) {
+                if (matrix[i][l].value!=0){
+                    sumRefs+= matrix[i][l].value.length;
+                }
+            }
+            obj.sumRefs = sumRefs;
+            obj2.sumRefs = sumRefs;
+            libs.push(obj);
+            libs2.push(obj2);
+        }
+        // Order libs2 by the total of references
+        libs2.sort(function (a, b) {
+            if (a.sumRefs < b.sumRefs) {
+                return 1;
+            }
+            else
+                return -1;
+        });
+        // Copy the order from libs2 to processes
+        for (var i=0; i<libs2.length; i++) {
+            var index = libs2[i].index;
+            libs[index].indexSumRefs = i;
+        }
+        //var processes1 = processDif(processes1,processes3[0].index);
+        processes1 = processDif(processes1,0);
+        libs = processLib(libs,0);
+
+        // Order options
+        var orderOption =2;
+        function getProcessIndex(index){  // order of process in row of the matrix
+            var newIndex;
+            if (orderOption==0) {// default order of processes
+                newIndex = index;
+            }
+            else if (orderOption==1) {// order by the total lib references
+                newIndex = processes1[index].indexSumRefs;
+            }
+            else{
+                newIndex = processes1[index].indexSimilarity;
+            }
+            return newIndex;
+        }
+        function getLibIndex(index){  // order of process in column of the matrix
+            var newIndex;
+            if (orderOption==0) {// default order of processes
+                newIndex = index;
+            }
+            else if (orderOption==1) {// order by the total lib references
+                newIndex = libs[index].indexSumRefs;
+            }
+            else{
+                newIndex = libs[index].indexSimilarity;
+            }
+            return newIndex;
+        }
+
+
+        var ColorScale = d3.scaleLinear()
+            .domain([0, Math.sqrt(maxvalue)])
+            .range([0, 1]);
+        var svgMatrix = d3.select('#matrix').append('svg').attr('height',svgheight+300).attr('width',"100%").attr('margin-top',"15px");
+        matrix.forEach(function (row,index) {
+
+            var group = svgMatrix.append('g').attr('height',12).attr('transform','translate(200,'+getProcessIndex(index)*(rect_height+spacing)+')')
+                var rect = group.selectAll('rect')
+                    .data(row)
+                    .enter()
+                    .append('rect')
+                    .attr("class",'mat_rect')
+                    .attr('width',rect_width)
+                    .attr('height',rect_height)
+                    .attr('x',function (d,i) {
+                      return  getLibIndex(i)*(rect_height+spacing);
+                    })
+                    .attr('fill',function (d) {
+                        return d.value==0 ? 'white' : d3.interpolateOrRd(ColorScale(Math.sqrt(d.value.length)));
+                    }).on('mouseenter', function (d,i) {
+                       if(d.source==undefined) return;
+                        // d3.selectAll('.mat_rect').classed('cell-hover',false);
+                        d3.select(this).classed("cell-hover",true);
+
+                        for (var r=0; r<processes1.length; r++) {
+                            if (r==index)
+                                d3.selectAll(".rowLabel.mono.r"+r).style("opacity", 1);
+                            else
+                                d3.selectAll(".rowLabel.mono.r"+r).style("opacity", 0.2);
+                          //  d3.selectAll(".colLabel.mono.c"+i).style("opacity", 1);;
+                        }
+                        for (var c=0; c<libs.length; c++) {
+                            if (c==i)
+                                d3.selectAll(".colLabel.mono.c"+c).style("opacity", 1);
+                            else
+                                d3.selectAll(".colLabel.mono.c"+c).style("opacity", 0.2);
+                        }
+
+                        //
+                        // svgMatrix.append('rect')
+                        //     .attr('x',200+i*(rect_height+spacing))
+                        //     .attr('width',rect_width)
+                        //     .attr('height',svgheight - (rect_height+spacing)*(index+1))
+                        //     .attr('class','highlight-bar').attr('y',(rect_height+spacing)*(index+1));
+                        //
+                        // svgMatrix.append('rect')
+                        //     .attr('x',200)
+                        //     .attr('width',function () {
+                        //       return (i)*(rect_width+spacing);
+                        //     })
+                        //
+                        //     .attr('height',rect_height)
+                        //     .attr('class','highlight-bar')
+                        //     .attr('y',index*(rect_height+spacing));
+                        div.transition()
+                            // .duration(200)
+                            .style("opacity", 1);
+                        var text = "";
+                            d.value.forEach(function (value) { text +="Time: "+  value.Timestamp +"&nbsp; Lib: " +value.library +"<br>" })
+                        div.html("<b>Number of calls: "+d.value.length+"</b><p>"+text)
+                            .style("width","300px")
+                            .style("left", (d3.event.pageX) + 20 + "px")
+                            .style("top", (d3.event.pageY) + "px");
+
+                    })
+                    .on('mouseleave',function (d,i) {
+                        d3.select(this).classed("cell-hover",false);
+                        for (var r=0; r<processes1.length; r++) {
+                            d3.selectAll(".rowLabel.mono.r"+r).style("opacity", 1);
+                        }
+                        for (var c=0; c<libs.length; c++) {
+                            d3.selectAll(".colLabel.mono.c"+c).style("opacity", 1);
+                        }
+                    });
+
+        })
+        //Draw text
+            var textGroup = svgMatrix.append('g').attr('transform','translate(200,'+matrix.length*(rect_height+spacing)+')')
+            var text = textGroup.selectAll('text').data(lib).enter().append('text').attr('x',function (d,i) {
+                return (i)*(rect_height+spacing);
+            }).text(function (d) {
+                return d;
+            }).attr("class",  function (d,i) { return "colLabel mono c"+i;} )
+                .attr('transform',function (d,i) {
+                return 'rotate(45 '+i*(rect_height+spacing)+',0)';
+            })
+
+            var horizontalText = svgMatrix.append('g').attr('width',200);
+            var horitext = horizontalText.selectAll('text')
+                .data(group_by_process_name).enter().append('text').text(function (d) {
+                    return d.key;
+                })
+                .attr("class", function (d,i) { return "rowLabel mono r"+i;} )
+                    .attr('x',190)
+                .attr('y',function (d,i) {
+                    return getProcessIndex(i)*(rect_height+spacing) +rect_height/2;
+                }).attr('text-anchor', 'end');
+
+
+    }
+
+</script>
+</body>
+</html>
